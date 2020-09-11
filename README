@@ -1,0 +1,4 @@
+### References 
+1. Its been awhile since I used Rust, so i referenced this book frequently https://doc.rust-lang.org/book/
+2. This guide was quite useful in getting the web server up and running https://rocket.rs/v0.4/guide/requests/
+3. This was also my first time using docker so i followed this https://shaneutt.com/blog/rust-fast-small-docker-image-builds/
