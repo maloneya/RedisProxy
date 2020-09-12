@@ -583,15 +583,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hello_web"
-version = "0.1.0"
-dependencies = [
- "futures",
- "redis",
- "rocket",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1078,6 +1069,15 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url 2.1.1",
+]
+
+[[package]]
+name = "redis_proxy"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "redis",
+ "rocket",
 ]
 
 [[package]]

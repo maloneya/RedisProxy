@@ -53,7 +53,7 @@ fn main() {
     let (tx, rx): (SyncSender<RedisRequest>, Receiver<RedisRequest>) = sync_channel(20);
     let producer = RedisProducer::new(tx);
 
-    let lru = LRUCache::new();
+    let lru = LRUCache::new(10, std::time::Duration::from_secs(1));
     let redis_provider = RedisClientWraper::new();
 
     let consumer = RedisConsumer::new(rx, lru, redis_provider);

@@ -1,4 +1,23 @@
+### LRU Cache Design
+Design Overview: 
+
+Tradeoffs: 
+To achvie better performance we trade off memeory footprint in two scenarios
+1. The LRU Cache has two internal collections, each with one entry per CacheEntry. This allows us to very quickly look up a value for a key (with the hash map) and also very quikcly find our oldest element (with the sorted vec)
+2. Cache element timeout is lazy - timed out elements are not actually removed, they are just ignored, and replaced. this means that in cases where key access is sporadic we could have a lot of wasted memeory of timedout cache entries that are only evicted via the LRU eviction policy. (this tradeoff was also made to keep the code a bit simpler) 
+ 
+
+### To depend or not to depend 
+1. HTTP server - As much as I love interacting with the Socket API, the lack of novel requirements on the HTTP layer made this an ideal candidate to simply solve with a libary. My evaluation critiera was more focused on API simplicity and minimal code footprint which is what led me to select Rocket over the more widely used (and potentially more performant) actix. 
+2. Redis Client - 
+2. LRU Cache - The rust standard libarary does not contain an LRU. I did a brief evaluation of the most popular LRU crates on crates.io and found the most popular to be in maintenence mode. Given the lack of obvious library to use, and this projects requiremetns for cache entry timeout i decided to build my own. 
+
+### Optimizations I would like to make
+- The most obvious performance hit is all the string deep copies (or to use Rust's word - "Cloneing"). In the RedisRequest result fetching we unfortunately have to copy the value out of the Mutex, even though that object is about to be cleaned up. This could be improved with some way to simply take the result. For large results this is particularly bad. 
+
+
 ### References 
 1. Its been awhile since I used Rust, so i referenced this book frequently https://doc.rust-lang.org/book/
 2. This guide was quite useful in getting the web server up and running https://rocket.rs/v0.4/guide/requests/
 3. This was also my first time using docker so i followed this https://shaneutt.com/blog/rust-fast-small-docker-image-builds/
+4. For the LRU i referenced some of the ideas in this exerimental std library LRU cache https://doc.rust-lang.org/0.12.0/std/collections/lru_cache/struct.LruCache.html
