@@ -81,13 +81,73 @@ impl RedisWorker {
     }
 }
 
+fn help() {
+    println!(
+        "Usage:
+    redis_proxy [options]
+    
+    Options:
+    --cache_expr_sec sets the time in seconds that values will remain in the cache
+    --cache_size     sets the Size of the internal LRU cache
+    --redis_addr     the address of the backing redis"
+    )
+}
+
+fn parse_args() -> Option<(std::time::Duration, usize, String)> {
+    let args: Vec<String> = std::env::args().collect();
+    match args.len() {
+        1 | 3 | 5 | 7 => println!("parsing args"),
+        _ => {
+            help();
+            return None;
+        }
+    }
+
+    if let Some(_) = args.iter().find(|arg| (*arg).eq("--help")) {
+        help();
+        return None;
+    }
+
+    let expr = match args.iter().position(|arg| (*arg).eq("--cache_expr_sec")) {
+        Some(arg_pos) => std::time::Duration::from_secs(args[arg_pos + 1].parse::<u64>().unwrap()),
+        None => {
+            println!("using default duration 10 sec");
+            std::time::Duration::from_secs(10)
+        }
+    };
+
+    let size = match args.iter().position(|arg| (*arg).eq("--cache_size")) {
+        Some(arg_pos) => args[arg_pos + 1].parse::<usize>().unwrap(),
+        None => {
+            println!("using default cache size 100");
+            100
+        }
+    };
+
+    let addr = match args.iter().position(|arg| (*arg).eq("--redis_addr")) {
+        Some(arg_pos) => args[arg_pos + 1].clone(),
+        None => {
+            let default_addr = "redis://127.0.0.1/".to_string();
+            println!("using default reddis addr {}", default_addr);
+            default_addr
+        }
+    };
+
+    Some((expr, size, addr))
+}
+
 fn main() {
+    let (expr, size, addr) = match parse_args() {
+        Some(args) => args,
+        None => return,
+    };
+
     //todo channel size
     let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
     let producer = RedisProducer::new(tx.clone());
 
-    let lru = LRUCache::new(1000, std::time::Duration::from_secs(10));
-    let redis_provider = RedisClientWraper::new("redis://127.0.0.1/".to_string());
+    let lru = LRUCache::new(size, expr);
+    let redis_provider = RedisClientWraper::new(addr);
 
     let consumer = RedisConsumer::new(rx, lru, redis_provider);
     let worker = RedisWorker::new(consumer, tx.clone());
