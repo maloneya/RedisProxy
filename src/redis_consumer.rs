@@ -10,7 +10,7 @@ use {
  * get data from the backing redis
  */
 pub trait RedisProvider {
-    fn fetch(&self, key: &String) -> Result<String, redis::RedisError>;
+    fn fetch(&self, key: &String) -> Result<Option<String>, redis::RedisError>;
 }
 
 /*
@@ -25,7 +25,7 @@ pub struct RedisClientWraper {
 }
 
 impl RedisProvider for RedisClientWraper {
-    fn fetch(&self, key: &String) -> Result<String, redis::RedisError> {
+    fn fetch(&self, key: &String) -> Result<Option<String>, redis::RedisError> {
         let client = redis::Client::open("redis://127.0.0.1/")?;
         let mut con = client.get_connection()?;
         con.get(key)
@@ -89,10 +89,11 @@ where
                     let key = request.key.clone();
                     let cached_get = self.cache.get(&key);
                     match cached_get {
-                        Some(val) => request.set_result(Ok(val)),
+                        Some(val) => request.set_result(Ok(Some(val))),
                         None => {
                             let redis_get = self.redis_provider.fetch(&key);
-                            if let Ok(ref val) = redis_get {
+                            //Only fill cache on succesfull redis response
+                            if let Ok(Some(ref val)) = redis_get {
                                 self.cache.put(&key, val.clone());
                             }
                             request.set_result(redis_get);
@@ -124,14 +125,16 @@ mod tests {
 
     struct MockRedis;
     impl RedisProvider for MockRedis {
-        fn fetch(&self, key: &String) -> Result<String, redis::RedisError> {
+        fn fetch(&self, key: &String) -> Result<Option<String>, redis::RedisError> {
             if key == "redis_hit" {
-                return Ok(String::from("hit_redis"));
+                return Ok(Some(String::from("hit_redis")));
+            } else if key == "redis_err" {
+                return Err(redis::RedisError::from((
+                    redis::ErrorKind::ResponseError,
+                    "err",
+                )));
             }
-            Err(redis::RedisError::from((
-                redis::ErrorKind::ResponseError,
-                "err",
-            )))
+            Ok(None)
         }
     }
 
@@ -156,7 +159,7 @@ mod tests {
         tx.send(Message::Shutdown);
         consumer.consume_requests();
         let val = request.get_result();
-        assert_eq!(val, "hit_cache".to_string());
+        assert_eq!(val, Some("hit_cache".to_string()));
     }
     #[test]
     fn test_redis_get() {
@@ -169,6 +172,34 @@ mod tests {
         tx.send(Message::Shutdown);
         consumer.consume_requests();
         let val = request.get_result();
-        assert_eq!(val, "hit_redis".to_string());
+        assert_eq!(val, Some("hit_redis".to_string()));
+    }
+
+    #[test]
+    fn test_redis_err() {
+        let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+        let consumer = RedisConsumer::new(rx, MockCache, MockRedis);
+
+        let request = RedisRequest::new(String::from("redis_err"));
+
+        tx.send(Message::Request(request.clone()));
+        tx.send(Message::Shutdown);
+        consumer.consume_requests();
+        let val = request.get_result();
+        assert_eq!(val, Some("err".to_string()));
+    }
+
+    #[test]
+    fn test_redis_miss() {
+        let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+        let consumer = RedisConsumer::new(rx, MockCache, MockRedis);
+
+        let request = RedisRequest::new(String::from("redis_miss"));
+
+        tx.send(Message::Request(request.clone()));
+        tx.send(Message::Shutdown);
+        consumer.consume_requests();
+        let val = request.get_result();
+        assert_eq!(val, None);
     }
 }

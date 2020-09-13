@@ -15,8 +15,10 @@ use std::{
  *     across threads (allows the producer and the consuemr to read the value)
  *   - Mutex: guards the result value, preventing simultainous acccess and
  *     any data race
- *   - Optional and Result: this allows us to check if a result has been set,
- *     and check if the request was complete succefully.
+ *   - Optional and Result:
+ *      - Outer Option signals to the condvar that the consumer has completed
+ *      - Result indicates if Redis returned an error
+ *      - inner Option signals if redis contained a value for the key
  *   - Condvar: allows us to syncronize the completion of the request. The
  *     consumer can notify the producer when the optional result has been set
  */
@@ -24,7 +26,10 @@ use std::{
 #[derive(Clone)]
 pub struct RedisRequest {
     pub key: String,
-    pub result: Arc<(Mutex<Option<Result<String, redis::RedisError>>>, Condvar)>,
+    pub result: Arc<(
+        Mutex<Option<Result<Option<String>, redis::RedisError>>>,
+        Condvar,
+    )>,
 }
 
 impl RedisRequest {
@@ -35,7 +40,7 @@ impl RedisRequest {
         }
     }
 
-    pub fn set_result(&mut self, res: Result<String, redis::RedisError>) {
+    pub fn set_result(&mut self, res: Result<Option<String>, redis::RedisError>) {
         let (locked_result, cvar) = &*self.result;
         let mut result_guard = locked_result.lock().unwrap();
         *result_guard = Some(res);
@@ -46,7 +51,7 @@ impl RedisRequest {
      * Consumes the redis request. Blocks until a result is
      * ready. Returns the result.
      */
-    pub fn get_result(self) -> String {
+    pub fn get_result(self) -> Option<String> {
         let (locked_result, cvar) = &*self.result;
         let mut result_guard = locked_result.lock().unwrap();
         while let None = *result_guard {
@@ -57,7 +62,7 @@ impl RedisRequest {
         match &(*result_guard) {
             Some(result) => match result {
                 Ok(r) => r.clone(),
-                Err(e) => e.description().to_string(),
+                Err(e) => Some(e.description().to_string()),
             },
             None => panic!("Woke up from condvar.wait with no resut"),
         }
@@ -68,3 +73,5 @@ pub enum Message {
     Request(RedisRequest),
     Shutdown,
 }
+
+//todo add unit tests

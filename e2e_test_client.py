@@ -22,16 +22,29 @@ def set_in_redis(test_data):
         r.set(k, v)
 
 
-def get_from_proxy(test_data):
+def get_from_proxy_expect_success(test_data):
     (k, v) = test_data
     request = f"http://localhost:8000/get?key={k}"
     proxy_res = requests.get(request)
-    print(proxy_res.text)
+    print(f"{k}:{proxy_res.text}")
     assert proxy_res.text == v
 
 
-test_data = generate_test_data(40)
+def get_from_proxy_expect_fail(test_data):
+    (k, v) = test_data
+    request = f"http://localhost:8000/get?key={k}"
+    proxy_res = requests.get(request)
+    print(f"{k}:{proxy_res.text}")
+
+
+test_data = generate_test_data(1000)
 set_in_redis(test_data)
 
+bad_test_data = generate_test_data(10)
+
+
 with Pool(10) as p:
-    p.map(get_from_proxy, test_data.items())
+    p.map(get_from_proxy_expect_fail, bad_test_data.items())
+    # p.map(get_from_proxy_expect_success, test_data.items())
+    # p.map(get_from_proxy_expect_success, test_data.items())
+

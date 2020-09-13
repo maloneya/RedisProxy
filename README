@@ -3,6 +3,7 @@
 
 # Key assumptions 
  1. The Cache implementation can currently panic! and crash the worker thread. While it is certianly possible to catch panics and go to redis in the case of a bug in the cache, there are enviornments where that would be not ideal. Assuming the proxy RPS is high, and the cache hit rate is high having 100% of requests fail the cache and go to the backing redis could create a cascading failure and take redis down with it. In the case where panics from the cache are allowed to crash the proxy, the only service in our system that crashes is the proxy. 
+ 2. There are a few ways we could handle redis miss, we could return an HTTP 204 to indicate that the reqeust was succeful but there was no content. I chose to more closely mirror the redis protocol and return an empty string.  
 
 ### LRU Cache Design
 Design Overview: 

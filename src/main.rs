@@ -44,7 +44,10 @@ impl RedisProducer {
 #[get("/get?<key>")]
 fn get(key: String, request_producer: State<RedisProducer>) -> String {
     let request = request_producer.produce_requests(key);
-    request.get_result()
+    match request.get_result() {
+        Some(val) => val,
+        None => "".to_string(),
+    }
 }
 
 /*
@@ -83,8 +86,8 @@ fn main() {
     let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
     let producer = RedisProducer::new(tx.clone());
 
-    let lru = LRUCache::new(10, std::time::Duration::from_secs(1));
-    let redis_provider = RedisClientWraper::new("we need a url!!!".to_string());
+    let lru = LRUCache::new(1000, std::time::Duration::from_secs(10));
+    let redis_provider = RedisClientWraper::new("redis://127.0.0.1/".to_string());
 
     let consumer = RedisConsumer::new(rx, lru, redis_provider);
     let worker = RedisWorker::new(consumer, tx.clone());
