@@ -42,11 +42,9 @@ impl RedisProducer {
 }
 
 #[get("/get?<key>")]
-fn get(key: String, request_producer: State<RedisProducer>) -> &'static str {
+fn get(key: String, request_producer: State<RedisProducer>) -> String {
     let request = request_producer.produce_requests(key);
-    let value = request.get_result();
-    println!("{}", value.unwrap());
-    "fix return types"
+    request.get_result()
 }
 
 /*
@@ -86,10 +84,11 @@ fn main() {
     let producer = RedisProducer::new(tx.clone());
 
     let lru = LRUCache::new(10, std::time::Duration::from_secs(1));
-    let redis_provider = RedisClientWraper::new();
+    let redis_provider = RedisClientWraper::new("we need a url!!!".to_string());
 
     let consumer = RedisConsumer::new(rx, lru, redis_provider);
     let worker = RedisWorker::new(consumer, tx.clone());
+    //todo where do i set numberf of web threads?
     rocket::ignite()
         .manage(producer)
         .manage(worker) /* passing ownership to rocket triggers cleanup of worker on shutdown */

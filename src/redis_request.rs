@@ -1,4 +1,7 @@
-use std::sync::{Arc, Condvar, Mutex};
+use std::{
+    error::Error,
+    sync::{Arc, Condvar, Mutex},
+};
 
 /*
  * The RedisRequest is responsible for passing the reqeusted key
@@ -21,7 +24,7 @@ use std::sync::{Arc, Condvar, Mutex};
 #[derive(Clone)]
 pub struct RedisRequest {
     pub key: String,
-    pub result: Arc<(Mutex<Option<Result<String, i32>>>, Condvar)>,
+    pub result: Arc<(Mutex<Option<Result<String, redis::RedisError>>>, Condvar)>,
 }
 
 impl RedisRequest {
@@ -32,7 +35,7 @@ impl RedisRequest {
         }
     }
 
-    pub fn set_result(&mut self, res: Result<String, i32>) {
+    pub fn set_result(&mut self, res: Result<String, redis::RedisError>) {
         let (locked_result, cvar) = &*self.result;
         let mut result_guard = locked_result.lock().unwrap();
         *result_guard = Some(res);
@@ -43,16 +46,19 @@ impl RedisRequest {
      * Consumes the redis request. Blocks until a result is
      * ready. Returns the result.
      */
-    pub fn get_result(self) -> Result<String, i32> {
+    pub fn get_result(self) -> String {
         let (locked_result, cvar) = &*self.result;
         let mut result_guard = locked_result.lock().unwrap();
         while let None = *result_guard {
             result_guard = cvar.wait(result_guard).unwrap();
         }
 
-        //TODO this is jank that we have to clone the string
-        match result_guard.as_ref() {
-            Some(result) => result.clone(),
+        //Deref mutex guard, then get ref to mutex data
+        match &(*result_guard) {
+            Some(result) => match result {
+                Ok(r) => r.clone(),
+                Err(e) => e.description().to_string(),
+            },
             None => panic!("Woke up from condvar.wait with no resut"),
         }
     }
