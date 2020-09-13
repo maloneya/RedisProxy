@@ -1,3 +1,9 @@
+# Usage
+1. Address of backing redis is passed to proxy via the --redis_addr flag
+2. cache expiry time is passed to the proxy via the --cache_expr_sec flag
+3. Cache capacity is passed to the proxy via the --cache_size flag
+4. TCP port the proxy listens on is configured in the DOCKERFILE for the proxy via the ROCKET_PORT env variable 
+
 # Design Choices 
  On language selection - TODO 
 
