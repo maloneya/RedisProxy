@@ -84,6 +84,7 @@ where
      */
     pub fn start(self) -> thread::JoinHandle<()> {
         thread::spawn(move || {
+            //todo cache integration. do we want to catch cache panics?
             //let client = redis::Client::open("todo reddis url").unwrap();
             for mut request in self.work_queue_rx {
                 //let mut con = client.get_connection().unwrap();
