@@ -41,7 +41,7 @@ impl RedisProducer {
     }
 }
 
-#[get("/get?<key>")]
+#[get("/<key>")]
 fn get(key: String, request_producer: State<RedisProducer>) -> String {
     let request = request_producer.produce_requests(key);
     match request.get_result() {

@@ -24,7 +24,7 @@ def set_in_redis(test_data):
 
 def get_from_proxy_expect_success(test_data):
     (k, v) = test_data
-    request = f"http://localhost:8000/get?key={k}"
+    request = f"http://localhost:8000/{k}"
     proxy_res = requests.get(request)
     print(f"{k}:{proxy_res.text}")
     assert proxy_res.text == v
@@ -32,7 +32,7 @@ def get_from_proxy_expect_success(test_data):
 
 def get_from_proxy_expect_fail(test_data):
     (k, v) = test_data
-    request = f"http://localhost:8000/get?key={k}"
+    request = f"http://localhost:8000/{k}"
     proxy_res = requests.get(request)
     print(f"{k}:{proxy_res.text}")
     assert proxy_res.text == ""
