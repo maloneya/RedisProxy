@@ -1,6 +1,6 @@
 use {
     crate::lru_cache::Cache,
-    crate::redis_request::RedisRequest,
+    crate::redis_request::{Message, RedisRequest},
     redis::Commands,
     std::{sync::mpsc::Receiver, thread},
 };
@@ -10,7 +10,7 @@ use {
  * get data from the backing redis
  */
 pub trait RedisProvider {
-    fn fetch(&self);
+    fn fetch(&self, key: &String) -> Option<Result<String, i32>>;
 }
 
 /*
@@ -23,8 +23,8 @@ pub trait RedisProvider {
 pub struct RedisClientWraper;
 
 impl RedisProvider for RedisClientWraper {
-    fn fetch(&self) {
-        //todo
+    fn fetch(&self, key: &String) -> Option<Result<String, i32>> {
+        Some(Ok("hello world".to_string()))
     }
 }
 
@@ -42,7 +42,7 @@ impl RedisClientWraper {
  */
 
 pub struct RedisConsumer<TCache: Cache, TProvider: RedisProvider> {
-    work_queue_rx: Receiver<RedisRequest>,
+    work_queue_rx: Receiver<Message>,
     redis_provider: TProvider,
     cache: TCache,
 }
@@ -66,7 +66,7 @@ where
     TProvider: RedisProvider + Send + 'static,
 {
     pub fn new(
-        work_queue_rx: Receiver<RedisRequest>,
+        work_queue_rx: Receiver<Message>,
         cache: TCache,
         redis_provider: TProvider,
     ) -> RedisConsumer<TCache, TProvider> {
@@ -77,23 +77,113 @@ where
         }
     }
 
-    /*
-     * Takes ownership of the RedisConsumer and moves it
-     * into a woker thread to processing incomming requests
-     * Retruns a handle to that Worker to be joined at shutdown
-     */
-    pub fn start(self) -> thread::JoinHandle<()> {
-        thread::spawn(move || {
-            //todo cache integration. do we want to catch cache panics?
-            //let client = redis::Client::open("todo reddis url").unwrap();
-            for mut request in self.work_queue_rx {
-                //let mut con = client.get_connection().unwrap();
-                let key = request.key.clone();
-                println!("{}", key);
-                //let val: String = con.get(key).unwrap();
-                let val = String::from("General Kenobi");
-                request.set_result(val);
+    pub fn consume_requests(mut self) {
+        for msg in self.work_queue_rx {
+            match msg {
+                Message::Shutdown => return,
+                Message::Request(mut request) => {
+                    let key = request.key.clone();
+                    let cached_get = self.cache.get(&key);
+                    match cached_get {
+                        Some(val) => request.set_result(Ok(val)),
+                        None => {
+                            let redis_get = self.redis_provider.fetch(&key);
+                            match redis_get {
+                                Some(res) => {
+                                    let val = res.unwrap(); //todo
+                                    request.set_result(Ok(val.clone()));
+                                    self.cache.put(&key, val);
+                                }
+                                //todo better error handling here
+                                None => request.set_result(Err(-1)),
+                            }
+                        }
+                    }
+                }
             }
-        })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::redis_consumer::*,
+        std::sync::mpsc::{sync_channel, Receiver, SyncSender},
+    };
+
+    struct MockCache;
+    impl Cache for MockCache {
+        fn get(&mut self, key: &String) -> Option<String> {
+            if key == "cache_hit" {
+                return Some(String::from("hit_cache"));
+            }
+            None
+        }
+        fn put(&mut self, _: &String, _: String) {}
+    }
+
+    struct MockRedis;
+    impl RedisProvider for MockRedis {
+        fn fetch(&self, key: &String) -> Option<Result<String, i32>> {
+            if key == "redis_hit" {
+                return Some(Ok(String::from("hit_redis")));
+            }
+            if key == "redis_err" {
+                return Some(Err(-2));
+            }
+
+            None
+        }
+    }
+
+    #[test]
+    fn test_shutdown() {
+        let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+        let consumer = RedisConsumer::new(rx, MockCache, MockRedis);
+
+        tx.send(Message::Shutdown);
+        //expect to exit immediately.
+        consumer.consume_requests()
+    }
+
+    #[test]
+    fn test_cache_get() {
+        let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+        let consumer = RedisConsumer::new(rx, MockCache, MockRedis);
+
+        let request = RedisRequest::new(String::from("cache_hit"));
+
+        tx.send(Message::Request(request.clone()));
+        tx.send(Message::Shutdown);
+        consumer.consume_requests();
+        let val = request.get_result();
+        assert_eq!(val, Ok("hit_cache".to_string()));
+    }
+    #[test]
+    fn test_redis_get() {
+        let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+        let consumer = RedisConsumer::new(rx, MockCache, MockRedis);
+
+        let request = RedisRequest::new(String::from("redis_hit"));
+
+        tx.send(Message::Request(request.clone()));
+        tx.send(Message::Shutdown);
+        consumer.consume_requests();
+        let val = request.get_result();
+        assert_eq!(val, Ok("hit_redis".to_string()));
+    }
+    #[test]
+    fn test_redis_miss() {
+        let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+        let consumer = RedisConsumer::new(rx, MockCache, MockRedis);
+
+        let request = RedisRequest::new(String::from("redis_miss"));
+
+        tx.send(Message::Request(request.clone()));
+        tx.send(Message::Shutdown);
+        consumer.consume_requests();
+        let val = request.get_result();
+        assert_eq!(val, Err(-1));
     }
 }

@@ -32,10 +32,10 @@ impl RedisRequest {
         }
     }
 
-    pub fn set_result(&mut self, res: String) {
+    pub fn set_result(&mut self, res: Result<String, i32>) {
         let (locked_result, cvar) = &*self.result;
         let mut result_guard = locked_result.lock().unwrap();
-        *result_guard = Some(Ok(res));
+        *result_guard = Some(res);
         cvar.notify_one();
     }
 
@@ -43,7 +43,7 @@ impl RedisRequest {
      * Consumes the redis request. Blocks until a result is
      * ready. Returns the result.
      */
-    pub fn get_result(self) -> String {
+    pub fn get_result(self) -> Result<String, i32> {
         let (locked_result, cvar) = &*self.result;
         let mut result_guard = locked_result.lock().unwrap();
         while let None = *result_guard {
@@ -52,11 +52,13 @@ impl RedisRequest {
 
         //TODO this is jank that we have to clone the string
         match result_guard.as_ref() {
-            Some(result) => match result {
-                Ok(r) => r.clone(),
-                Err(_) => panic!("got error from redis result"),
-            },
-            None => panic!("expected value from redis result"),
+            Some(result) => result.clone(),
+            None => panic!("Woke up from condvar.wait with no resut"),
         }
     }
+}
+
+pub enum Message {
+    Request(RedisRequest),
+    Shutdown,
 }
