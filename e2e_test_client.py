@@ -35,6 +35,7 @@ def get_from_proxy_expect_fail(test_data):
     request = f"http://localhost:8000/get?key={k}"
     proxy_res = requests.get(request)
     print(f"{k}:{proxy_res.text}")
+    assert proxy_res.text == ""
 
 
 test_data = generate_test_data(1000)
@@ -44,7 +45,11 @@ bad_test_data = generate_test_data(10)
 
 
 with Pool(10) as p:
+    # test that the proxy can handle values missing from redis
     p.map(get_from_proxy_expect_fail, bad_test_data.items())
-    # p.map(get_from_proxy_expect_success, test_data.items())
-    # p.map(get_from_proxy_expect_success, test_data.items())
+    # test that the proxy can handle values not in the cache
+    p.map(get_from_proxy_expect_success, test_data.items())
+    # send same keys to test that the proxy can serve values
+    # out of the cache
+    p.map(get_from_proxy_expect_success, test_data.items())
 
