@@ -158,7 +158,8 @@ fn main() {
     let consumer = RedisConsumer::new(rx, lru, redis_provider);
     let worker = RedisWorker::new(consumer, tx.clone());
 
-    //Using
+    //Using the default web server configs - which gives us 16 worker threads
+    //for incoming connections
     rocket::ignite()
         .manage(producer)
         .manage(worker) /* passing ownership to rocket triggers cleanup of worker on shutdown */
