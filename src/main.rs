@@ -11,7 +11,7 @@ mod redis_request;
 
 use {
     lru_cache::LRUCache,
-    redis_consumer::{RedisClientWraper, RedisConsumer},
+    redis_consumer::{RedisClientWrapper, RedisConsumer},
     redis_request::{Message, RedisRequest},
     rocket::State,
     std::sync::mpsc::{sync_channel, Receiver, SyncSender},
@@ -19,7 +19,7 @@ use {
 
 /*
  * This defines the producer of RedisRequests and is responsible
- * for passing incomming web requests to the RedisConsumer
+ * for passing incoming web requests to the RedisConsumer
  */
 
 #[derive(Clone)]
@@ -51,7 +51,7 @@ fn get(key: String, request_producer: State<RedisProducer>) -> String {
 }
 
 /*
- * The Redis Worker takes ownsership of a redisConsumer and begins a new thread
+ * The Redis Worker takes ownership of a redisConsumer and begins a new thread
  * to run consume requests on.
  *
  * Implements the Drop trait which will trigger the worker thread to shutdown
@@ -59,23 +59,30 @@ fn get(key: String, request_producer: State<RedisProducer>) -> String {
  */
 
 pub struct RedisWorker {
-    worker_handle: std::thread::JoinHandle<()>,
+    worker_handle: Option<std::thread::JoinHandle<()>>,
     msg_queue_for_shutdown: SyncSender<Message>,
 }
 
 impl Drop for RedisWorker {
     fn drop(&mut self) {
-        self.msg_queue_for_shutdown.send(Message::Shutdown);
+        self.msg_queue_for_shutdown
+            .send(Message::Shutdown)
+            .expect("shutdown failed");
+        self.worker_handle
+            .take()
+            .unwrap()
+            .join()
+            .expect("worker thread join failed");
     }
 }
 
 impl RedisWorker {
     pub fn new(
-        consumer: RedisConsumer<LRUCache, RedisClientWraper>,
+        consumer: RedisConsumer<LRUCache, RedisClientWrapper>,
         msg_queue_for_shutdown: SyncSender<Message>,
     ) -> RedisWorker {
         RedisWorker {
-            worker_handle: std::thread::spawn(move || consumer.consume_requests()),
+            worker_handle: Some(std::thread::spawn(move || consumer.consume_requests())),
             msg_queue_for_shutdown,
         }
     }
@@ -98,6 +105,7 @@ fn parse_args() -> Option<(std::time::Duration, usize, String)> {
     match args.len() {
         1 | 3 | 5 | 7 => println!("parsing args"),
         _ => {
+            println!("Unexpected args {:?}", args);
             help();
             return None;
         }
@@ -128,7 +136,7 @@ fn parse_args() -> Option<(std::time::Duration, usize, String)> {
         Some(arg_pos) => args[arg_pos + 1].clone(),
         None => {
             let default_addr = "redis://127.0.0.1/".to_string();
-            println!("using default reddis addr {}", default_addr);
+            println!("using default redis addr {}", default_addr);
             default_addr
         }
     };
@@ -142,16 +150,15 @@ fn main() {
         None => return,
     };
 
-    //todo channel size
-    let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(20);
+    let (tx, rx): (SyncSender<Message>, Receiver<Message>) = sync_channel(100);
     let producer = RedisProducer::new(tx.clone());
 
     let lru = LRUCache::new(size, expr);
-    let redis_provider = RedisClientWraper::new(addr);
-
+    let redis_provider = RedisClientWrapper::new(addr);
     let consumer = RedisConsumer::new(rx, lru, redis_provider);
     let worker = RedisWorker::new(consumer, tx.clone());
-    //todo where do i set numberf of web threads?
+
+    //Using
     rocket::ignite()
         .manage(producer)
         .manage(worker) /* passing ownership to rocket triggers cleanup of worker on shutdown */

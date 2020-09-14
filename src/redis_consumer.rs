@@ -1,12 +1,10 @@
 use {
-    crate::lru_cache::Cache,
-    crate::redis_request::{Message, RedisRequest},
-    redis::Commands,
-    std::{sync::mpsc::Receiver, thread},
+    crate::lru_cache::Cache, crate::redis_request::Message, redis::Commands,
+    std::sync::mpsc::Receiver,
 };
 
 /*
- * This trait defines the interface throuhgh which our consumer can
+ * This trait defines the interface through which our consumer can
  * get data from the backing redis
  */
 pub trait RedisProvider {
@@ -14,17 +12,17 @@ pub trait RedisProvider {
 }
 
 /*
- * The reddis client wrapper abstracts the implementation details
- * of getting results from the reddis client. This implemetns the
+ * The redis client wrapper abstracts the implementation details
+ * of getting results from the redis client. This implements the
  * RedisProvider trait so that we can pass this into our redis
  * consumer, allowing it to get results from the backing redis
  */
 
-pub struct RedisClientWraper {
+pub struct RedisClientWrapper {
     redis_url: String,
 }
 
-impl RedisProvider for RedisClientWraper {
+impl RedisProvider for RedisClientWrapper {
     fn fetch(&self, key: &String) -> Result<Option<String>, redis::RedisError> {
         let client = redis::Client::open(self.redis_url.clone())?;
         let mut con = client.get_connection()?;
@@ -32,15 +30,19 @@ impl RedisProvider for RedisClientWraper {
     }
 }
 
-impl RedisClientWraper {
-    pub fn new(redis_url: String) -> RedisClientWraper {
+impl RedisClientWrapper {
+    pub fn new(redis_url: String) -> RedisClientWrapper {
+        //TODO sleep and Retry once on failure, its possible the
+        //proxy started up before redis
         println!("Initializing redis client at addr {:?}", redis_url);
         let client = redis::Client::open(redis_url.clone()).unwrap();
-        let mut con = client.get_connection().unwrap();
+        let mut con = client
+            .get_connection()
+            .expect("RedisClientWrapper failed to connect to redis ");
         let pong: Option<String> = redis::cmd("PING").query(&mut con).unwrap();
         assert_eq!(pong, Some("PONG".to_string()));
 
-        RedisClientWraper { redis_url }
+        RedisClientWrapper { redis_url }
     }
 }
 
@@ -58,7 +60,7 @@ pub struct RedisConsumer<TCache: Cache, TProvider: RedisProvider> {
 }
 
 /*
- * To achive our generic consumer we need to promise a few things to
+ * To achieve our generic consumer we need to promise a few things to
  * the compiler about our Generic types.
  *
  * TCache    - Requires that this type implement the cache trait
@@ -98,7 +100,7 @@ where
                         Some(val) => request.set_result(Ok(Some(val))),
                         None => {
                             let redis_get = self.redis_provider.fetch(&key);
-                            //Only fill cache on succesfull redis response
+                            //Only fill cache on successful redis response
                             if let Ok(Some(ref val)) = redis_get {
                                 self.cache.put(&key, val.clone());
                             }
@@ -115,6 +117,7 @@ where
 mod tests {
     use {
         crate::redis_consumer::*,
+        crate::redis_request::RedisRequest,
         std::sync::mpsc::{sync_channel, Receiver, SyncSender},
     };
 

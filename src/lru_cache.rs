@@ -15,7 +15,7 @@ impl CacheEntry {
             Ok(lifetime) => lifetime,
             Err(err) => {
                 eprintln!(
-                    "LRU Cache recieved unexpected error from system
+                    "LRU Cache received unexpected error from system
                      clock when evaluating cache timeout {} 
                      - Defaulting to expired",
                     err
@@ -28,7 +28,7 @@ impl CacheEntry {
 }
 
 /*
- * This trait defines the interface throuhgh which our consumer can
+ * This trait defines the interface through which our consumer can
  * get and set data from the Cache
  */
 pub trait Cache {
@@ -37,8 +37,8 @@ pub trait Cache {
 }
 
 pub struct LRUCache {
-    //TODO evaluate what syncronization primitives are necessary
-    //to ensure there arent weird races between the map and the vec
+    //TODO evaluate what synchronization primitives are necessary
+    //to ensure there aren't weird races between the map and the vec
     cache_elements: HashMap<String, CacheEntry>,
     keys_ordered_by_use: Vec<String>,
     max_cache_entry_lifetime: Duration,
@@ -56,7 +56,7 @@ impl Cache for LRUCache {
                     return None;
                 }
                 //we need to clone val and release 'entry'
-                //first becasue entry holds an immutable borrow to
+                //first because entry holds an immutable borrow to
                 //self. and mark_key_used needs a mutable borrow
                 let val = e.val.clone();
                 self.mark_key_used(key);

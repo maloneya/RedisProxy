@@ -1,25 +1,22 @@
-use std::{
-    error::Error,
-    sync::{Arc, Condvar, Mutex},
-};
+use std::sync::{Arc, Condvar, Mutex};
 
 /*
- * The RedisRequest is responsible for passing the reqeusted key
+ * The RedisRequest is responsible for passing the requested key
  * from Producer to consumer, providing a method for the consumer
  * to safely pass a result back to the producer, and allowing the
- * consumer to wait for the reuslt to be completed wihtout consuming
+ * consumer to wait for the result to be completed without consuming
  * CPU time
  *
- * To achvie this the result member utilizes:
+ * To archive this the result member utilizes:
  *   - ARC (atomic reference count): a smart pointer that can be shared
- *     across threads (allows the producer and the consuemr to read the value)
- *   - Mutex: guards the result value, preventing simultainous acccess and
+ *     across threads (allows the producer and the consumer to read the value)
+ *   - Mutex: guards the result value, preventing simultaneous access and
  *     any data race
  *   - Optional and Result:
  *      - Outer Option signals to the condvar that the consumer has completed
  *      - Result indicates if Redis returned an error
  *      - inner Option signals if redis contained a value for the key
- *   - Condvar: allows us to syncronize the completion of the request. The
+ *   - Condvar: allows us to synchronize the completion of the request. The
  *     consumer can notify the producer when the optional result has been set
  */
 
@@ -62,9 +59,9 @@ impl RedisRequest {
         match &(*result_guard) {
             Some(result) => match result {
                 Ok(r) => r.clone(),
-                Err(e) => Some(e.description().to_string()),
+                Err(e) => Some(e.to_string()),
             },
-            None => panic!("Woke up from condvar.wait with no resut"),
+            None => panic!("Woke up from condvar.wait with no result"),
         }
     }
 }
