@@ -9,8 +9,6 @@ COPY . .
 # Rocket depends on nightly :( 
 RUN rustup default nightly
 
-RUN cargo build --release 
-RUN cargo test
 RUN cargo install --path . 
 
 
