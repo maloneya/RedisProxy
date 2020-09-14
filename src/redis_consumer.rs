@@ -26,7 +26,7 @@ pub struct RedisClientWraper {
 
 impl RedisProvider for RedisClientWraper {
     fn fetch(&self, key: &String) -> Result<Option<String>, redis::RedisError> {
-        let client = redis::Client::open("redis://127.0.0.1/")?;
+        let client = redis::Client::open(self.redis_url.clone())?;
         let mut con = client.get_connection()?;
         con.get(key)
     }
@@ -34,6 +34,12 @@ impl RedisProvider for RedisClientWraper {
 
 impl RedisClientWraper {
     pub fn new(redis_url: String) -> RedisClientWraper {
+        println!("Initializing redis client at addr {:?}", redis_url);
+        let client = redis::Client::open(redis_url.clone()).unwrap();
+        let mut con = client.get_connection().unwrap();
+        let pong: Option<String> = redis::cmd("PING").query(&mut con).unwrap();
+        assert_eq!(pong, Some("PONG".to_string()));
+
         RedisClientWraper { redis_url }
     }
 }
